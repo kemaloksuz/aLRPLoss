@@ -1,12 +1,12 @@
 # aLRP Loss: A Ranking-based, Balanced Loss Function Unifying Classification and Localisation in Object Detection
 
-Average Localisation-Recall-Precision (aLRP) Loss is a ranking-based loss function to train object detectors by unifying localisation and classification branches. We define aLRP Loss as the average [Localisation Recall Precision](https://arxiv.org/abs/1807.01696) [1] values on positive examples. To tackle the nondifferentiable nature of ranking during backpropagation, we combine error-driven update of perceptron learning with backpropogation by generalizing the training approach of AP Loss [2] to ranking-based loss functions (see Section 4 in the paper for details). 
+Average Localisation-Recall-Precision (aLRP) Loss is a ranking-based loss function to train object detectors by unifying localisation and classification branches. We define aLRP Loss as the average [Localisation Recall Precision](https://arxiv.org/abs/1807.01696) [1] errors on positive examples. To tackle the nondifferentiable nature of ranking during backpropagation, we combine error-driven update of perceptron learning with backpropogation by generalizing the training approach of AP Loss [2] to ranking-based loss functions (see Section 4 in the paper for details). 
 
-With this formulation, aLRP Loss (i) enforces the predictions with large confidence scores to have better localisation, and correlates the classification and localisation tasks (see Figure), (ii) has significantly less number of hyperparameters than conventional loss formulation (only 1 hyperparameter compared to around 6), and (iii) guarantees balanced training (see Theorem 2 in the paper).
+With this formulation, aLRP Loss (i) enforces the predictions with large confidence scores to have better localisation, and correlates the classification and localisation tasks (see Figure below), (ii) has significantly less number of hyperparameters (i.e. only 1 hyperparameter) than the conventional loss formulation (i.e. the combination of classification and regression losses by a scaler weight), and (iii) guarantees balanced training (see Theorem 2 in the paper).
 
 ![aLRP Toy Example](assets/Teaser.png)
 
-This repository provides the implementation of aLRP Loss based on [official AP Loss repository](https://github.com/cccorn/AP-loss). In short, a more-efficient mmdetection-based implementation with a diverse set of models trained by aLRP Loss will be released. 
+This repository provides the implementation of aLRP Loss based on [official AP Loss repository](https://github.com/cccorn/AP-loss). Within a short period of time, a more-efficient mmdetection-based implementation including different models (e.g. FoveaBox, Faster R-CNN) trained by aLRP Loss will be released. 
 
 Please cite the paper if you benefit from our paper or repository:
 ```
@@ -23,7 +23,6 @@ Please cite the paper if you benefit from our paper or repository:
 - CUDA 10.0
 - NumPy 1.16+
 - [mmcv](https://github.com/open-mmlab/mmcv)
-
 
 ## Training Code
 You can train a model by running the following code:
@@ -46,13 +45,13 @@ Also using our code, the results of AP Loss can be reproduced with the following
 ```
 
 ## Test Code
-You can test a model by running the following code on "test-dev2017" or "val2017" of COCO splits.
-
+You can test a model on "test-dev2017" or "val2017" splits of COCO dataset by running the following code:
 ```
 python test.py --cfg PATH_TO_CONFIG_FILE
 ```
 In addition to standard COCO-style performance metrics, our evaluation code reports APs for every IoU to compute COCO-Style AP, and also oLRP.
-## Results of the Base Models (w Scale 500)
+
+## Results of the Base Models (with Scale 500)
 
 |    Method     |  Backbone   | oLRP (minival) | AP (minival) | Download  |
 | :-------------: | :-----: | :------------: | :------------: | :-------: |
@@ -104,5 +103,5 @@ We use ResNet-50 and ResNet-101 pre-trained models provided by the official AP-L
 
 
 ## References
-[1] Oksuz K, Cam BC, Akbas E, Kalkan S, Localization recall precision (LRP): A newperformance metric for object detection, ECCV 2018.
+[1] Oksuz K, Cam BC, Akbas E, Kalkan S, Localization recall precision (LRP): A newperformance metric for object detection, ECCV 2018.  
 [2] Chen K, Li J, Lin W, See J, Wang J, Duan L, Chen Z, He C, Zou J, Towards Accurate One-Stage Object Detection With AP-Loss, CVPR 2019 & TPAMI.
