@@ -1,8 +1,12 @@
 import torch
+import pdb 
+import numpy as np
+import matplotlib.pyplot as plt
+from pathlib import Path
 
-class aLRPLoss(torch.autograd.Function):
+class APLoss(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, logits, targets, regression_losses, delta=1., eps=1e-5):  
+    def forward(ctx, logits, targets, delta=1.):  
         classification_grads=torch.zeros(logits.shape).cuda()
         cls_loss=torch.zeros(0).cuda()
         if torch.max(targets)<=0:
@@ -21,7 +25,6 @@ class aLRPLoss(torch.autograd.Function):
         relevant_bg_labels=((targets==0)&(logits>=threshold_logit))
         relevant_bg_logits=logits[relevant_bg_labels] 
         relevant_bg_grad=torch.zeros(len(relevant_bg_logits)).cuda()
-        rank=torch.zeros(fg_num).cuda()
         prec=torch.zeros(fg_num).cuda()
         fg_grad=torch.zeros(fg_num).cuda()
         
@@ -46,15 +49,19 @@ class aLRPLoss(torch.autograd.Function):
             rank_pos=1+torch.sum(fg_relations)
             FP_num=torch.sum(bg_relations)
             #Store the total since it is normalizer also for aLRP Regression error
-            rank[ii]=rank_pos+FP_num
+            rank=rank_pos+FP_num
 
-            #Compute precision for this example to compute classification loss 
-            prec[ii]=rank_pos/rank[ii]                
-            
-            #For stability, set eps to a infinitesmall value (e.g. 1e-6), then compute grads
-            if FP_num>eps:   
-                fg_grad[ii] = -(torch.sum(fg_relations*regression_losses)+FP_num)/rank[ii]
-                relevant_bg_grad += (bg_relations*(-fg_grad[ii]/FP_num))   
+            #Compute precision for this example 
+            current_prec=rank_pos/rank
+            #Compute interpolated AP and store gradients for relevant bg examples
+            if (max_prec<=current_prec):
+                max_prec=current_prec
+                relevant_bg_grad += (bg_relations/rank)
+            else:
+                relevant_bg_grad += (bg_relations/rank)*(((1-max_prec)/(1-current_prec)))
+            #Store fg gradients
+            fg_grad[ii]=-(1-max_prec)
+            prec[ii]=max_prec                                
                     
         #aLRP with grad formulation fg gradient
         classification_grads[fg_labels]= fg_grad
@@ -68,9 +75,9 @@ class aLRPLoss(torch.autograd.Function):
         cls_loss=1-prec.mean()
         ctx.save_for_backward(classification_grads)
 
-        return cls_loss, rank, order
+        return cls_loss
 
     @staticmethod
-    def backward(ctx, out_grad1, out_grad2, out_grad3):
+    def backward(ctx, out_grad1):
         g1, =ctx.saved_tensors
-        return g1*out_grad1, None, None, None, None
+        return g1*out_grad1, None, None

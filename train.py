@@ -18,12 +18,9 @@ import shutil
 import time
 
 from lib.model import model
-from lib.model import model_resNext
 
-from lib.dataloader.dataloader import CocoDataset, VocDataset, collater, AspectRatioBasedSampler, Augmentation
+from lib.dataloader.dataloader import CocoDataset, collater, AspectRatioBasedSampler, Augmentation
 from torch.utils.data import Dataset, DataLoader
-
-#from lib import config
 
 print('CUDA available: {}'.format(torch.cuda.is_available()))
 def log_losses(cfg_name, timestr, out_dir, epoch_num, iter_num, classification_loss, regression_loss, reg_weight, time):
@@ -43,7 +40,6 @@ def log_losses(cfg_name, timestr, out_dir, epoch_num, iter_num, classification_l
         log_file.write(json_object)
         log_file.write('\n')
 
-
 def main(args=None):
     parser     = argparse.ArgumentParser(description='Simple training script for training a RetinaNet network.')
 
@@ -54,33 +50,24 @@ def main(args=None):
     
     cfg = Config.fromfile(parser.cfg)
     timestr = time.strftime("%H%M%S-%Y%m%d")
-    if os.path.isdir(cfg['out_dir']) == False:
-        os.mkdir(cfg['out_dir']) 
+    if os.path.isdir(cfg['logger'].out_dir) == False:
+        os.mkdir(cfg['logger'].out_dir) 
     
-    with torch.cuda.device(cfg['gpu_ids'][0]):
-        set_name=[iset for iset in cfg['data_partition']['train_set'].split('+')]
+    with torch.cuda.device(cfg['optimization'].gpu_ids[0]):
+        set_name=[iset for iset in cfg['dataset'].training_set.split('+')]
         # Create the data loaders
-        if cfg['dataset'] == 'coco':
-            dataset_train = CocoDataset(cfg['data_partition']['path'], set_name=set_name, transform=Augmentation(cfg['pixel_mean'], cfg['pixel_std'], cfg['train_img_size'], cfg['augmentation_style']))
-        elif cfg['dataset'] == 'minicoco':
-            dataset_train = CocoDataset(cfg['data_partition']['path'], set_name=set_name, transform=Augmentation(cfg['pixel_mean'], cfg['pixel_std'], cfg['train_img_size'], cfg['augmentation_style']))
-        elif cfg['dataset'] == 'voc':
-            dataset_train = VocDataset(cfg['data_partition']['path'], set_name=set_name, transform=Augmentation(cfg['pixel_mean'], cfg['pixel_std'], cfg['train_img_size'], cfg['augmentation_style']))
-        else:
-            raise ValueError('Not implemented.')
+        dataset_train = CocoDataset(cfg['dataset'].path, set_name=set_name, transform=Augmentation(cfg['input_image'].norm_mean, cfg['input_image'].norm_std, cfg['input_image'].image_size, cfg['input_image'].augmentation))
 
-        sampler = AspectRatioBasedSampler(dataset_train, batch_size=cfg['batch_size']*len(cfg['gpu_ids']))
-        dataloader_train = DataLoader(dataset_train, num_workers=len(cfg['gpu_ids']), collate_fn=collater, batch_sampler=sampler)
+        sampler = AspectRatioBasedSampler(dataset_train, batch_size=cfg['optimization'].image_per_gpu*len(cfg['optimization'].gpu_ids))
+        dataloader_train = DataLoader(dataset_train, num_workers=cfg['optimization'].num_workers, collate_fn=collater, batch_sampler=sampler)
 
         # Create the model 
-        if cfg['depth'] == 'R50':
+        if cfg['backbone'].type == 'ResNet' and cfg['backbone'].depth == 50:
             retinanet = model.resnet50(num_classes=dataset_train.num_classes(), cfg=cfg, pretrained=True)
-        elif cfg['depth'] == 'R101':
-            retinanet = model.resnet101(num_classes=dataset_train.num_classes(), cfg=cfg, pretrained=True)
-        elif cfg['depth'] == 'R152':
-            retinanet = model.resnet152(num_classes=dataset_train.num_classes(), cfg=cfg, pretrained=True)            
-        elif cfg['depth'] == 'X101':
-            retinanet = model_resNext.resneXt101(num_classes=dataset_train.num_classes(), cfg=cfg, pretrained=True)            
+        elif cfg['backbone'].type == 'ResNet' and cfg['backbone'].depth == 101:
+            retinanet = model.resnet101(num_classes=dataset_train.num_classes(), cfg=cfg, pretrained=True)          
+        elif cfg['backbone'].type == 'ResNeXt' and cfg['backbone'].depth == 101:
+            retinanet = model.resneXt101(num_classes=dataset_train.num_classes(), cfg=cfg, pretrained=True)            
         else:
             raise ValueError('Not implemented')
 
@@ -89,15 +76,14 @@ def main(args=None):
         if use_gpu:
             retinanet = retinanet.cuda()
     	
-        retinanet = torch.nn.DataParallel(module=retinanet,device_ids=cfg['gpu_ids']).cuda()
+        retinanet = torch.nn.DataParallel(module=retinanet, device_ids=cfg['optimization'].gpu_ids).cuda()
         
         retinanet.training = True
 
-        optimizer = optim.SGD(retinanet.parameters(), lr=cfg['lr'], momentum=0.9, weight_decay=1e-4)
+        optimizer = optim.SGD(retinanet.parameters(), lr=cfg['optimization'].lr, momentum=cfg['optimization'].momentum, weight_decay = cfg['optimization'].weight_decay)
 
-        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=cfg['lr_step'], gamma=0.1)
+        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=cfg['optimization'].lr_decay_epoch, gamma=cfg['optimization'].lr_decay_weight)
 
-        warmup=cfg['warmup']
         begin_epoch=0
         if parser.resume==True:
             retinanet.load_state_dict(torch.load(cfg['out_dir']+'/coco_retinanet_'+str(parser.resume_epoch)+'.pt'))
@@ -107,9 +93,9 @@ def main(args=None):
 
         cls_loss_hist = collections.deque(maxlen=300)
         reg_loss_hist = collections.deque(maxlen=300)
-        cls_LRP_hist = collections.deque(maxlen=50)
-        reg_LRP_hist = collections.deque(maxlen=50)
-
+        if cfg['loss'].cls_loss.type == 'aLRPLoss' and cfg['loss'].reg_loss.type == 'aLRPLoss':
+            cls_LRP_hist = collections.deque(maxlen=50)
+            reg_LRP_hist = collections.deque(maxlen=50)
         tic_hist = collections.deque(maxlen=100)
 
         retinanet.train()
@@ -117,16 +103,17 @@ def main(args=None):
 
         print('Num training images: {}'.format(len(dataset_train)))
 
-        # If aLRP Loss then initialize regression weight 
-        # for the first epoch
-        if cfg['classification_loss'] == 'aLRP':
-            cls_weight = 1
-            reg_weight = 50      
+        # Self Balance is initialized here
+        if cfg['loss'].cls_loss.type == 'aLRPLoss' and cfg['loss'].reg_loss.type == 'aLRPLoss':
+                cls_weight = 1
+                reg_weight = 50
         else:
-            cls_weight = cfg['classifier_weight']
-            reg_weight = cfg['regressor_weight']      
+                cls_weight = cfg['loss'].cls_loss.weight
+                reg_weight = cfg['loss'].reg_loss.weight
+
+    
         
-        for epoch_num in range(begin_epoch,cfg['epochs']):
+        for epoch_num in range(begin_epoch, cfg['optimization'].total_epoch_num):
 
             retinanet.train()
             retinanet.module.freeze_bn()
@@ -146,9 +133,9 @@ def main(args=None):
 
                 loss.backward()
 
-                if warmup and optimizer._step_count<=cfg['warmup_step']:
-                    init_lr=cfg['lr']
-                    warmup_lr=init_lr*cfg['warmup_factor'] + optimizer._step_count/float(cfg['warmup_step'])*(init_lr*(1-cfg['warmup_factor']))
+                if cfg['optimization'].warmup and optimizer._step_count<=cfg['optimization'].warmup_step:
+                    init_lr=cfg['optimization'].lr
+                    warmup_lr=init_lr*cfg['optimization'].warmup_factor + optimizer._step_count/float(cfg['optimization'].warmup_step)*(init_lr*(1-cfg['optimization'].warmup_factor))
                     for ii_ in optimizer.param_groups:
                         ii_['lr']=warmup_lr 
 
@@ -158,28 +145,28 @@ def main(args=None):
                 cls_loss_hist.append(float(classification_loss))
                 reg_loss_hist.append(float(regression_loss))
 
-                if iter_num % cfg['log_interval'] == 0:
-                    if cfg['classification_loss'] == 'aLRP':
-                	    cls_LRP_hist.append(float(np.mean(cls_loss_hist)))
-                	    reg_LRP_hist.append(float(np.mean(reg_loss_hist)))
-                    print('Epoch: {} | Iteration: {} | Classification loss: avg: {:1.5f}, cur: {:1.5f} | Localisation loss: avg: {:1.5f}, cur: {:1.5f} | Total loss: avg: {:1.5f}, cur: {:1.5f} | Speed: {:1.5f} sec./iter.| Localisation Weight: {:1.5f}'.format(epoch_num, iter_num, np.mean(cls_loss_hist), float(classification_loss), np.mean(reg_loss_hist), float(regression_loss), np.mean(reg_loss_hist)+np.mean(cls_loss_hist), float(regression_loss)+float(classification_loss), np.mean(tic_hist), float(reg_weight)))
-                    log_losses(parser.cfg, timestr, cfg['out_dir'], epoch_num, iter_num, np.mean(cls_loss_hist), np.mean(reg_loss_hist), reg_weight, np.mean(tic_hist))
-
+                if iter_num % cfg['logger'].interval == 0:
+                    if cfg['loss'].cls_loss.type == 'aLRPLoss' and cfg['loss'].reg_loss.type == 'aLRPLoss':
+                        cls_LRP_hist.append(float(np.mean(cls_loss_hist)))
+                        reg_LRP_hist.append(float(np.mean(reg_loss_hist)))
+                        print('Epoch: {} | Iteration: {} | Classification loss: avg: {:1.5f}, cur: {:1.5f} | Localisation loss: avg: {:1.5f}, cur: {:1.5f} | Total loss: avg: {:1.5f}, cur: {:1.5f} | Speed: {:1.5f} sec./iter.| Self-Balance Weight: {:1.5f}'.format(epoch_num, iter_num, np.mean(cls_loss_hist), float(classification_loss), np.mean(reg_loss_hist), float(regression_loss), np.mean(reg_loss_hist)+np.mean(cls_loss_hist), float(regression_loss)+float(classification_loss), np.mean(tic_hist), float(reg_weight)))
+                    else:
+                        print('Epoch: {} | Iteration: {} | Classification loss: avg: {:1.5f}, cur: {:1.5f} | Localisation loss: avg: {:1.5f}, cur: {:1.5f} | Total loss: avg: {:1.5f}, cur: {:1.5f} | Speed: {:1.5f} sec./iter.'.format(epoch_num, iter_num, np.mean(cls_loss_hist), float(classification_loss), np.mean(reg_loss_hist), float(regression_loss), np.mean(reg_loss_hist)+np.mean(cls_loss_hist), float(regression_loss)+float(classification_loss), np.mean(tic_hist)))
+                    log_losses(parser.cfg, timestr, cfg['logger'].out_dir, epoch_num, iter_num, np.mean(cls_loss_hist), np.mean(reg_loss_hist), reg_weight, np.mean(tic_hist))
 
                 del classification_loss
                 del regression_loss 
 
             scheduler.step()
-            if cfg['classification_loss'] == 'aLRP':
+            if cfg['loss'].cls_loss.type == 'aLRPLoss' and cfg['loss'].reg_loss.type == 'aLRPLoss':
                 reg_weight = (np.mean(reg_LRP_hist)+np.mean(cls_LRP_hist))/np.mean(reg_LRP_hist)
                 cls_LRP_hist.clear()
                 reg_LRP_hist.clear()
-                
-            torch.save(retinanet.state_dict(), cfg['out_dir'] + '/{}_retinanet_{}.pt'.format(cfg['dataset'], epoch_num))
+            torch.save(retinanet.state_dict(), cfg['logger'].out_dir + '/{}_retinanet_{}.pt'.format(cfg['dataset'].type, epoch_num))
             
         retinanet.eval()
 
-        torch.save(retinanet.state_dict(), cfg['out_dir'] + '/model_final.pt'.format(epoch_num))
+        torch.save(retinanet.state_dict(), cfg['logger'].out_dir + '/model_final.pt'.format(epoch_num))
 
 if __name__ == '__main__':
     main()

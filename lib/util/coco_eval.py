@@ -1,9 +1,8 @@
 from __future__ import print_function
 
 from pycocotools.coco import COCO
-#from pycocotools.cocoeval import COCOeval
 #Use our evaluation for mAP@0.9
-from .coco_eval_larger_IoU import COCOeval
+from .coco_eval_oLRP_largerIoU import COCOeval
 
 import numpy as np
 import json

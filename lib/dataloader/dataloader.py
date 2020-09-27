@@ -3,7 +3,6 @@ import os
 import torch
 import numpy as np
 import random
-import pdb
 
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
@@ -13,7 +12,6 @@ from pycocotools.coco import COCO
 from ..util.pascal_voc_eval import voc_eval
 import cv2
 #from .. import config
-import pdb
 from .augmentations import Augmentation
 
 class CocoDataset(Dataset):
@@ -395,56 +393,6 @@ def collater(data):
 
     return {'img': padded_imgs, 'annot': annot_padded}
 
-
-class Resizer_Equal(object):
-    """Convert ndarrays in sample to Tensors."""
-    def __init__(self, cfg):
-        self.cfg = cfg
-
-    def __call__(self, sample):
-        
-        new_image_ = []
-        annots_ = []
-        dims2_ = []
-        scalex_ = []
-        scaley_ = []
-        size_ths = []
-         
-        for idx, test_size in enumerate(self.cfg['test_img_size']):
-            
-            image, annots = sample['img'], sample['annot']
-            rows, cols, cns = image.shape
-            
-
-            # rescale the image so the smallest side is min_side
-            scale_y = test_size / rows  
-            scale_x = test_size / cols 
-
-            # resize the image with the computed scale
-            image = cv2.resize(image, (test_size,test_size), interpolation=cv2.INTER_LINEAR)
-            rows2, cols2, cns = image.shape
-
-            pad_w=0
-            pad_h=0
-
-            new_image = np.zeros((rows2 + pad_w, cols2 + pad_h, cns)).astype(np.float32)
-            new_image[:rows2, :cols2, :] = image.astype(np.float32)
-
-        
-            annots_wh = annots[:,2:4]-annots[:,0:2]+1.0
-            annots[:,0:2] = annots[:,0:2]/np.array([cols,rows])*np.array([cols2,rows2])
-            annots[:,2:4]=annots[:,0:2]+annots_wh/np.array([cols,rows])*np.array([cols2,rows2])-1.0
-
-            new_image_.append(new_image)
-            annots_.append(annots)
-            dims2_.append([[rows2, cols2]])
-            scalex_.append(scale_x)
-            scaley_.append(scale_y)
-            size_ths.append(self.cfg['multi_scale_ths'][idx])
-
-        dims2_ = np.asarray(dims2_)
-        return {'img': new_image_, 'annot': annots_, 'scale_x': scalex_,'scale_y': scaley_, 'im_info': torch.tensor(dims2_), 'size_th':size_ths}
-
 class Resizer(object):
     """Convert ndarrays in sample to Tensors."""
     def __init__(self, cfg):
@@ -458,7 +406,7 @@ class Resizer(object):
         scale_ = []
         size_ths = []
          
-        for idx, test_size in enumerate(self.cfg['test_img_size']):
+        for idx, test_size in enumerate(self.cfg['test'].image_size):
             
             image, annots = sample['img'], sample['annot']
             rows, cols, cns = image.shape
@@ -501,7 +449,7 @@ class Resizer(object):
             annots_.append(annots)
             dims2_.append([[rows2, cols2]])
             scale_.append(scale)
-            size_ths.append(self.cfg['multi_scale_ths'][idx])
+            size_ths.append(self.cfg['test'].multi_scale_thr[idx])
 
         dims2_ = np.asarray(dims2_)
         return {'img': new_image_, 'annot': annots_, 'scale': scale_, 'im_info': torch.tensor(dims2_), 'size_th':size_ths}

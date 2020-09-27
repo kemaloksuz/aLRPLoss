@@ -26,7 +26,7 @@ def load_json_logs(json_logs):
 
 
 def main():
-    json_logs = ['./speed_logs/aLRPLoss500_r50_100e_ATSS_LessAnchor.json']    
+    json_logs = ['./speed_logs/APLoss500_r50_TRUBA.json']    
     for json_log in json_logs:
         assert json_log.endswith('.json')
     log_dicts = load_json_logs(json_logs)

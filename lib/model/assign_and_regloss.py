@@ -3,23 +3,26 @@ from ..util.calc_iou import calc_iou, bbox_overlaps, compute_giou, compute_diou
 import numpy as np 
 import pdb
 
-class MaxIoULabeler_and_LossRegression():
-    def __init__(self, batch_size, fpn_anchor_num, class_num, losstype, assigner, iou_type='IoU'):
-        self.batch_size=batch_size
-        self.output_num=int(fpn_anchor_num.sum()) 
-        self.fpn_anchor_num=fpn_anchor_num
-        self.class_num=class_num
-        self.assigner=assigner
-        if losstype=='SmoothL1':
+class Assign_and_RegLoss():
+    def __init__(self, image_per_gpu, fpn_anchor_num, num_classes, reg_loss, assigner, beta = 1.0):
+        self.image_per_gpu = image_per_gpu
+        self.output_num = int(fpn_anchor_num.sum()) 
+        self.fpn_anchor_num = fpn_anchor_num
+        self.num_classes = num_classes
+        self.reg_loss = reg_loss
+        self.assigner = assigner
+        if reg_loss.type =='SmoothL1':
             self.losstype=0
-        elif losstype=='IoULoss':
+        elif reg_loss.type =='IoULoss':
             self.losstype=1
-        elif losstype=='GIoULoss':
+        elif reg_loss.type =='GIoULoss':
             self.losstype=2            
-        elif losstype=='aLRP':    
+        elif reg_loss.type =='aLRPLoss':    
             self.losstype=3
-        self.tau = 0.5
-        self.iou_type=iou_type
+        # for aLRP Loss tau is 0.5
+        self.tau = 0.50
+        # Smooth L1 loss parameter
+        self.beta = beta
         
     def xy_to_wh(self, bbox):
           
@@ -75,23 +78,23 @@ class MaxIoULabeler_and_LossRegression():
 
     def compute(self, anchors, annotations, regressions): 
     	#Initialize data structures for assignment
-        labels_b = torch.ones([self.batch_size, self.output_num, self.class_num]).cuda()*-1
+        labels_b = torch.ones([self.image_per_gpu, self.output_num, self.num_classes]).cuda()*-1
 
     	#Initialize data structures for regression loss
         if self.losstype > 2:    
             regression_losses= torch.tensor([]).cuda()
         else:
-            regression_losses = torch.zeros(self.batch_size).cuda()
+            regression_losses = torch.zeros(self.image_per_gpu).cuda()
 
         anchor_boxes = self.xy_to_wh(anchors[0, :, :].type(torch.cuda.FloatTensor))
         p_num=0
-        for j in range(self.batch_size):
+        for j in range(self.image_per_gpu):
             
             bbox_annotation = annotations[j, :, :]
             bbox_annotation = bbox_annotation[bbox_annotation[:, 4] != -1]
 
             if bbox_annotation.shape[0] == 0:
-                labels_b[j]=torch.zeros([self.output_num, self.class_num]).cuda()
+                labels_b[j]=torch.zeros([self.output_num, self.num_classes]).cuda()
                 continue
 
             IoU = calc_iou(anchors[0, :, :], bbox_annotation[:, :4]) # num_anchors x num_annotations
@@ -137,7 +140,7 @@ class MaxIoULabeler_and_LossRegression():
                     # select k bbox whose center are closest to the gt center
                     end_idx = int(start_idx + bboxes_per_level)
                     distances_per_level = distances[start_idx:end_idx, :]
-                    selectable_k = min(self.assigner['topk'], bboxes_per_level)
+                    selectable_k = min(self.assigner['topk'], int(bboxes_per_level))
                     _, topk_idxs_per_level = distances_per_level.topk(selectable_k, dim=0, largest=False)
                     candidate_idxs.append(topk_idxs_per_level + start_idx)
                     start_idx = end_idx
@@ -187,7 +190,7 @@ class MaxIoULabeler_and_LossRegression():
                 labels_b[j, :, :] = 0
                 labels_b[j, positive_indices, assigned_annotations[positive_indices, 4].long()] = 1
 
-            #Regression Starts here
+            #Regression Loss Computation Starts here
             pos_ex_num=positive_indices.sum()
             p_num+=pos_ex_num
             
@@ -198,9 +201,9 @@ class MaxIoULabeler_and_LossRegression():
                     regression_diff_abs= torch.abs(regressions[j, positive_indices, :]-targets2)
 
                     regression_loss = torch.where(
-                        torch.le(regression_diff_abs, 1.0 / 1.0),
-                        0.5 * 1.0 * torch.pow(regression_diff_abs, 2),
-                        regression_diff_abs - 0.5 / 1.0
+                        torch.le(regression_diff_abs, self.beta),
+                        0.5 * torch.pow(regression_diff_abs, 2)/self.beta,
+                        regression_diff_abs - 0.5 * self.beta
                     )
                     regression_losses[j]=regression_loss.sum()
                 elif self.losstype == 1:
@@ -224,11 +227,10 @@ class MaxIoULabeler_and_LossRegression():
                     # convert targets and model outputs to boxes for IoU-Loss.
                     targets2_ = self.delta2bbox(targets2)
                     regression_ = self.delta2bbox(regressions[j, positive_indices, :])
-                    
                     # calculate bbox overlaps
-                    if self.iou_type == 'IoU':
+                    if self.reg_loss.iou_type == 'IoU':
                         ious = (1-bbox_overlaps(regression_, targets2_))
-                    elif self.iou_type =='GIoU':
+                    elif self.reg_loss.iou_type =='GIoU':
                         ious = (1-compute_giou(regression_, targets2_)) / 2
                     #tau is set to 0.5 by default 
                     regression_losses=torch.cat([regression_losses, ((ious)/(1-self.tau))], dim=0)          

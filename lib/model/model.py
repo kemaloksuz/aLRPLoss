@@ -3,14 +3,12 @@ import torch
 import math
 import time
 import numpy as np
-from ..util.utils import BasicBlock, Bottleneck
+from ..util.utils import Bottleneck, ResNext_Bottleneck
 from .anchors import Anchors
 from .alrploss import aLRPLoss
-from .focalloss import FocalLoss
+from .aploss import APLoss
 
-from .assign_lossregress import MaxIoULabeler_and_LossRegression
-
-import pdb
+from .assign_and_regloss import Assign_and_RegLoss
 
 class PyramidFeatures(nn.Module):
     def __init__(self, C3_size, C4_size, C5_size, feature_size=256):
@@ -151,16 +149,18 @@ class ClassificationModel(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, num_classes, block, layers, cfg, conv1_bias):
-        self.inplanes = 64
+    def __init__(self, num_classes, block, layers, cfg, conv1_bias, groups=1, width_per_group=64, inplanes=64):
         super(ResNet, self).__init__()
-        self.num_classes=num_classes
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=conv1_bias)
+        self.inplanes = inplanes
+        self.groups = groups
+        self.num_classes = num_classes
+        self.base_width = width_per_group
+        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=conv1_bias)
         
         for ii in self.conv1.parameters():
             ii.requires_grad=False
         
-        self.bn1 = nn.BatchNorm2d(64)
+        self.bn1 = nn.BatchNorm2d(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
@@ -172,32 +172,35 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
 
-        if block == BasicBlock:
-            fpn_sizes = [self.layer2[layers[1]-1].conv2.out_channels, self.layer3[layers[2]-1].conv2.out_channels, self.layer4[layers[3]-1].conv2.out_channels]
-        elif block == Bottleneck:
-            fpn_sizes = [self.layer2[layers[1]-1].conv3.out_channels, self.layer3[layers[2]-1].conv3.out_channels, self.layer4[layers[3]-1].conv3.out_channels]
+
+        fpn_sizes = [self.layer2[layers[1]-1].conv3.out_channels, self.layer3[layers[2]-1].conv3.out_channels, self.layer4[layers[3]-1].conv3.out_channels]
 
         self.fpn = PyramidFeatures(fpn_sizes[0], fpn_sizes[1], fpn_sizes[2])
+        num_anchors = len(cfg['anchor_design'].aspect_ratio)*len(cfg['anchor_design'].scale)
 
-        self.regressionModel = RegressionModel(256, num_anchors=cfg['num_anchors'])
-        self.classificationModel = ClassificationModel(256, num_classes=num_classes, num_anchors=cfg['num_anchors'])
+        self.regressionModel = RegressionModel(256, num_anchors = num_anchors)
+        self.classificationModel = ClassificationModel(256, num_classes=num_classes, num_anchors= num_anchors)
 
-        self.anchors = Anchors(cfg['anchor_ratios'], cfg['anchor_scales'], cfg['anchor_base_scale'])
+        self.anchors = Anchors(cfg['anchor_design'].aspect_ratio, cfg['anchor_design'].scale, cfg['anchor_design'].base_scale)
                 
-        self.classification_loss = cfg['classification_loss']
+        self.cls_loss_type = cfg['loss'].cls_loss.type
 
-        self.alrploss= aLRPLoss()
+        if self.cls_loss_type == 'aLRPLoss':
+            self.cls_loss = aLRPLoss()
+            self.delta = cfg['loss'].cls_loss.delta
+        elif self.cls_loss_type == 'APLoss':
+            self.cls_loss = APLoss()
+            self.delta = cfg['loss'].cls_loss.delta
 
-        if isinstance(cfg['train_img_size'], list):
-            size = cfg['train_img_size']
-        else:
-            size = [cfg['train_img_size'], cfg['train_img_size']]
-        image_shapes = [(np.array(size) + 2 ** x - 1) // (2 ** x) for x in [3, 4, 5, 6, 7]]
-        fpn_anchor_num = np.zeros([len(image_shapes)])
-        for i in range(len(image_shapes)):
-            fpn_anchor_num[i] = int(np.prod(image_shapes[i]) * self.anchors.base_anchors[i].shape[0])
-
-        self.assign_regress= MaxIoULabeler_and_LossRegression(cfg['batch_size'], fpn_anchor_num ,num_classes, cfg['regression_loss'], cfg['assigner'], cfg['iou_type'])
+        size = [cfg['input_image'].image_size, cfg['input_image'].image_size]
+        fpn_shapes = [(np.array(size) + 2 ** x - 1) // (2 ** x) for x in [3, 4, 5, 6, 7]]
+        fpn_anchor_num = np.zeros([len(fpn_shapes)])
+        for i in range(len(fpn_shapes)):
+            fpn_anchor_num[i] = int(np.prod(fpn_shapes[i]) * self.anchors.base_anchors[i].shape[0])
+        if self.cls_loss_type == 'aLRPLoss':
+            self.assign_regress= Assign_and_RegLoss(cfg['optimization'].image_per_gpu, fpn_anchor_num ,num_classes, cfg['loss'].reg_loss, cfg['assigner'])
+        elif self.cls_loss_type == 'APLoss':
+            self.assign_regress= Assign_and_RegLoss(cfg['optimization'].image_per_gpu, fpn_anchor_num ,num_classes, cfg['loss'].reg_loss, cfg['assigner'], cfg['loss'].reg_loss.beta)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -230,10 +233,18 @@ class ResNet(nn.Module):
             )
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample))
+        if block == ResNext_Bottleneck:
+            layers.append(block(self.inplanes, planes, stride, downsample, self.groups, self.base_width))
+        else:
+            layers.append(block(self.inplanes, planes, stride, downsample))
+
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes))
+            if block == ResNext_Bottleneck:
+                layers.append(block(self.inplanes, planes, groups=self.groups, base_width=self.base_width))
+            else:
+                layers.append(block(self.inplanes, planes))
+
 
         return nn.Sequential(*layers)
 
@@ -278,9 +289,11 @@ class ResNet(nn.Module):
             #Find out the matchings and compute localization errors according to these matchings. The regression losses are normalized by 1-tau if it is aLRP Loss.
             labels, regression_loss = self.assign_regress.compute(anchors, annotations, regressions)
 
-            #Apply AP or aLRP Loss and return the cls. loss, rank to normalize regression losses and the indices of regression losses sorted in ascending order
-            classification_loss, rank, order = self.alrploss.apply(classifications, labels, self.classification_loss, regression_loss.detach())        
-            if self.classification_loss == 'aLRP':
+            if self.cls_loss_type == 'APLoss':
+                classification_loss = self.cls_loss.apply(classifications, labels, self.delta)        
+            elif self.cls_loss_type == 'aLRPLoss':
+                #Apply AP or aLRP Loss and return the cls. loss, rank to normalize regression losses and the indices of regression losses sorted in ascending order
+                classification_loss, rank, order = self.cls_loss.apply(classifications, labels, regression_loss.detach(), self.delta)        
                 #Order the regression losses considering the scores. 
                 ordered_regression_losses = regression_loss[order.detach()].flip(dims=[0])
                 #Compute aLRP Regression Loss
@@ -289,23 +302,25 @@ class ResNet(nn.Module):
         else:
             return anchors, classifications, regressions
 
-def resnet50(num_classes, cfg, pretrained=False):
+def resnet50(num_classes, cfg, pretrained=False, blocks=[3, 4, 6, 3]):
 
-    model = ResNet(num_classes, Bottleneck, [3, 4, 6, 3], cfg, conv1_bias=True)
+    model = ResNet(num_classes, Bottleneck, blocks, cfg, conv1_bias=True)
     if pretrained:
         model.load_state_dict(torch.load('models/resnet50-pytorch.pth'), strict=False)
     return model
 
-def resnet101(num_classes, cfg, pretrained=False):
+def resnet101(num_classes, cfg, pretrained=False, blocks=[3, 4, 23, 3]):
  
-    model = ResNet(num_classes, Bottleneck, [3, 4, 23, 3], cfg, conv1_bias=False)
+    model = ResNet(num_classes, Bottleneck, blocks, cfg, conv1_bias=False)
     if pretrained:
         model.load_state_dict(torch.load('models/resnet101-pytorch.pth'), strict=False)
     return model
 
-def resnet152(num_classes, cfg, pretrained=False):
- 
-    model = ResNet(num_classes, Bottleneck, [3, 8, 36, 3], cfg, conv1_bias=False)
+def resneXt101(num_classes, cfg, pretrained=False, blocks=[3, 4, 23, 3], groups = 32, width_per_group = 8):
+    # ResNeXt-101-32x8d    
+    model = ResNet(num_classes, ResNext_Bottleneck, blocks, cfg, conv1_bias=False, groups=groups, width_per_group=width_per_group)
     if pretrained:
-        model.load_state_dict(torch.load('models/resnet152-caffe.pth'), strict=False)
+        pretrained_model= torch.load('models/resnext101_32x8d-8ba56ff5.pth')
+        model.load_state_dict(pretrained_model, strict=False)
+        
     return model
