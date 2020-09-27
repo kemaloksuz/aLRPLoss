@@ -1,5 +1,17 @@
 # aLRP Loss: A Ranking-based, Balanced Loss Function Unifying Classification and Localisation in Object Detection
 
+This repository provides the implementation of aLRP Loss. 
+
+Please cite the paper if you benefit from this repository:
+```
+@inproceedings{aLRPLoss,
+       title = {A Ranking-based, Balanced Loss Function Unifying Classification and Localisation in Object Detection},
+       author = {Kemal Oksuz and Baris Can Cam and Emre Akbas and Sinan Kalkan},
+       booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+       year = {2020}
+}
+```
+
 ## Specification of Dependencies
 - Python 3.7
 - PyTorch 1.2+
@@ -16,6 +28,8 @@ python train.py --cfg PATH_TO_CONFIG_FILE
 ```
 The configuration files are in the `config` folder. We provide all the configuration files used for comparison with SOTA methods in Table 4:
 ```
+- aLRPLoss500_r50.py
+- aLRPLoss500_r50_ATSS.py
 - aLRPLoss500_r101.py
 - aLRPLoss500_x101.py
 - aLRPLoss800_r101.py
@@ -23,8 +37,7 @@ The configuration files are in the `config` folder. We provide all the configura
 ```
 Also using our code, the results of AP Loss can be reproduced with the following configuration files:
 ```
-- APLoss500_r101.py
-- APLoss800_r101.py
+- APLoss500_r50.py
 ```
 Different options including the ablation experiments (and more) can be conducted by modifying configuration files. Further instructions/options are provided in the configuration files.
 
@@ -36,6 +49,14 @@ python test.py --cfg PATH_TO_CONFIG_FILE
 ```
 
 Currently, the configuration files are ready to reproduce test-dev results in Table 4. Replacing the test directory from "test-dev2017" "val2017" will conduct the test on validation set. More information can be found in the configuration files.
+
+## Results of the Base Models (w Scale 500)
+
+|    Method     |  Backbone   | oLRP (minival) | AP (minival) | Download  |
+| :-------------: | :-----: | :------------: | :------------: | :----: | :-------: |
+|    AP Loss    |  ResNet-50  |   71.0   |   35.5  | [model](https://drive.google.com/file/d/1ihhXuh49_PeGkfldo9LoD7GXWTi-ZaNc/view?usp=sharing)|
+|    aLRP Loss    | ResNet-50 |   68.4  |   38.9   | [model](https://drive.google.com/file/d/1NKFu0gxjEPbyFvYzTFppYrZHBeo4XIis/view?usp=sharing)|
+|    aLRP Loss + ATSS   | ResNet-50 |   67.3   |   40.2  | [model](https://drive.google.com/file/d/1vymO5NeUTSHX2ZYWYtiJv-80T4FtSmAp/view?usp=sharing)|
 
 ## Table of Main Results with Pretrained Models
 
@@ -75,10 +96,9 @@ Finally, the data directories should be arranged like:
 ├── data
 │   ├── coco
 │   │   ├── annotations
-│   │   ├── images
-│   │   │   ├── train2017
-│   │   │   ├── val2017
-│   │   │   ├── test-dev2017
+│   │   ├── train2017
+│   │   ├── val2017
+│   │   ├── test-dev2017
 ```
 - Prepare the pre-trained backbone models under `models` directory by following the structure below:
 ```
@@ -104,14 +124,7 @@ We use ResNet-50 and ResNet-101 pre-trained models provided by the official AP-L
 
 - Follow Option 1 to test and get the results. You can modify the config file to see the performance for a specific epoch. The instructions are provided in the config file.
 
-## The code segments directly related with the implementation of aLRP Loss
-
-This part provides an insight on the code by addressing the most relevant parts to see the interaction of the branches.
-
-- You can see how classification scores affect regression loss in lib/model/model.py lines 278-286. Notice that cumulative sum enforces the examples with larger score involve in the regression loss several times.
-
-- You can see the difference between AP Loss and aLRP Classification component from lib/model/alrploss.py lines 55-73. Notice that the localisation errors contribute to the gradients backpropagated from classification branch.
-
-- You can see the implementation of the self-balance extension in train.py lines 158-173.
-
-- You can check any config file under config folder for a general understanding provided by comments.
+## Release Notes
+This is the initial release of the code for aLRP Loss. After the camera ready deadline (22 October), we plan two updates to this repository:
+- An additional mmdetection-based implementation of aLRPLoss will be released. In that repository, we will release the code for training RetinaNet, FoveaBox and Faster R-CNN with aLRP Loss. Also, mmdetection implementation of these models are more efficient.
+- We will update this repository by making the code more readable. 

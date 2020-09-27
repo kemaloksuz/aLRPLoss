@@ -1,0 +1,10 @@
+data/
+models/
+results/
+loss_logs/
+logs/
+loss_plots/
+*.result
+*.pyc
+*.log.json
+*.swp
