@@ -43,7 +43,7 @@ Please cite the paper if you benefit from our paper or repository:
 - NumPy 1.16+
 - [mmcv](https://github.com/open-mmlab/mmcv)
 
-### Preparation Instructions:
+## Preparation Instructions:
 
 - Install required packages:
 ```
@@ -106,5 +106,5 @@ In addition to standard COCO-style performance metrics, our evaluation code repo
 
 
 ## References
-[1] Oksuz K, Cam BC, Akbas E, Kalkan S, Localization recall precision (LRP): A newperformance metric for object detection, ECCV 2018.  
+[1] Oksuz K, Cam BC, Akbas E, Kalkan S, Localization recall precision (LRP): A new performance metric for object detection, ECCV 2018.  
 [2] Chen K, Li J, Lin W, See J, Wang J, Duan L, Chen Z, He C, Zou J, Towards Accurate One-Stage Object Detection With AP-Loss, CVPR 2019 & TPAMI.
