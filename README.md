@@ -8,6 +8,8 @@ With this formulation, aLRP Loss (i) enforces the predictions with large confide
 
 This repository provides the implementation of aLRP Loss based on [official AP Loss repository](https://github.com/cccorn/AP-loss). Within a short period of time, a more-efficient mmdetection-based implementation including different models (e.g. FoveaBox, Faster R-CNN) trained by aLRP Loss will be released. 
 
+## How to Cite
+
 Please cite the paper if you benefit from our paper or repository:
 ```
 @inproceedings{aLRPLoss,
@@ -17,40 +19,6 @@ Please cite the paper if you benefit from our paper or repository:
        year = {2020}
 }
 ```
-## Specification of Dependencies
-- Python 3.7
-- PyTorch 1.2+
-- CUDA 10.0
-- NumPy 1.16+
-- [mmcv](https://github.com/open-mmlab/mmcv)
-
-## Training Code
-You can train a model by running the following code:
-
-```
-python train.py --cfg PATH_TO_CONFIG_FILE
-```
-The configuration files are in the `config` folder. We provide all the configuration files used for comparison with SOTA methods in Table 4:
-```
-- aLRPLoss500_r50.py
-- aLRPLoss500_r50_ATSS.py
-- aLRPLoss500_r101.py
-- aLRPLoss500_x101.py
-- aLRPLoss800_r101.py
-- aLRPLoss800_x101.py
-```
-Also using our code, the results of AP Loss can be reproduced with the following configuration files:
-```
-- APLoss500_r50.py
-```
-
-## Test Code
-You can test a model on "test-dev2017" or "val2017" splits of COCO dataset by running the following code:
-```
-python test.py --cfg PATH_TO_CONFIG_FILE
-```
-In addition to standard COCO-style performance metrics, our evaluation code reports APs for every IoU to compute COCO-Style AP, and also oLRP.
-
 ## Results of the Base Models (with Scale 500)
 
 |    Method     |  Backbone   | oLRP (minival) | AP (minival) | Download  |
@@ -68,7 +36,14 @@ In addition to standard COCO-style performance metrics, our evaluation code repo
 |    ResNet-101   | 800 |   64.5   |   43.6   |  44.1  | [model](https://drive.google.com/file/d/1vymO5NeUTSHX2ZYWYtiJv-80T4FtSmAp/view?usp=sharing)|
 | ResNext-101-32x8d | 800  |   62.7   |   45.4   |  45.9  | [model](https://drive.google.com/file/d/1gCrjqCc9i5-A4y-R6Xxbfpv1DiAH41Fy/view?usp=sharing)|
 
-### Preparation Instructions:
+## Specification of Dependencies
+- Python 3.7
+- PyTorch 1.2+
+- CUDA 10.0
+- NumPy 1.16+
+- [mmcv](https://github.com/open-mmlab/mmcv)
+
+## Preparation Instructions:
 
 - Install required packages:
 ```
@@ -101,7 +76,35 @@ Finally, the data directories should be arranged like:
 ```
 We use ResNet-50 and ResNet-101 pre-trained models provided by the official AP-Loss repository. Accordingly, you can download them from [this link](https://1drv.ms/u/s!AgPNhBALXYVSa1pQCFJNNk6JgaA?e=PqhsWD). For ResNext-101, we use the model provided by Pytorch [in this link](https://download.pytorch.org/models/resnext101_32x8d-8ba56ff5.pth) to download.
 
+## Training Code
+You can train a model by running the following code:
+
+```
+python train.py --cfg PATH_TO_CONFIG_FILE
+```
+The configuration files are in the `config` folder. We provide all the configuration files used for comparison with SOTA methods in Table 4:
+```
+- aLRPLoss500_r50.py
+- aLRPLoss500_r50_ATSS.py
+- aLRPLoss500_r101.py
+- aLRPLoss500_x101.py
+- aLRPLoss800_r101.py
+- aLRPLoss800_x101.py
+```
+Also using our code, the results of AP Loss can be reproduced with the following configuration files:
+```
+- APLoss500_r50.py
+```
+
+## Test Code
+You can test a model on "test-dev2017" or "val2017" splits of COCO dataset by running the following code:
+```
+python test.py --cfg PATH_TO_CONFIG_FILE
+```
+In addition to standard COCO-style performance metrics, our evaluation code reports APs for every IoU to compute COCO-Style AP, and also oLRP.
+
+
 
 ## References
-[1] Oksuz K, Cam BC, Akbas E, Kalkan S, Localization recall precision (LRP): A newperformance metric for object detection, ECCV 2018.  
+[1] Oksuz K, Cam BC, Akbas E, Kalkan S, Localization recall precision (LRP): A new performance metric for object detection, ECCV 2018.  
 [2] Chen K, Li J, Lin W, See J, Wang J, Duan L, Chen Z, He C, Zou J, Towards Accurate One-Stage Object Detection With AP-Loss, CVPR 2019 & TPAMI.
