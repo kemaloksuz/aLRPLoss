@@ -40,7 +40,7 @@ optimization = dict(image_per_gpu= 4, # Number of images per GPU
 	                lr_decay_weight = 0.10,
 	                momentum = 0.9, # Momentum factor
 	                weight_decay = 1e-4, # Weight decay factor
-	                gpu_ids = [0], # GPU ids
+	                gpu_ids = [0,1,2,3], # GPU ids
 	                num_workers = 4,
 	                warmup = True, # Whether or not to use warm up.
 	                warmup_step = 500, 
