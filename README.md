@@ -1,4 +1,12 @@
-# aLRP Loss: A Ranking-based, Balanced Loss Function Unifying Classification and Localisation in Object Detection
+# aLRP Loss: A Ranking-based, Balanced Loss Function Unifying Classification and Localisation in Object Detection 
+
+Official PyTorch implementation of aLRP Loss.
+
+> [**aLRP Loss: A Ranking-based, Balanced Loss Function Unifying Classification and Localisation in Object Detection**](https://arxiv.org/abs/2009.13592),            
+> [Kemal Oksuz](https://kemaloksuz.github.io/), Baris Can Cam, [Emre Akbas](http://user.ceng.metu.edu.tr/~emre/), [Sinan Kalkan](http://www.kovan.ceng.metu.edu.tr/~sinan/),
+> *NeurIPS 2020. ([arXiv pre-print](https://arxiv.org/abs/2009.13592))*
+
+## Summary
 
 Average Localisation-Recall-Precision (aLRP) Loss is a ranking-based loss function to train object detectors by unifying localisation and classification branches. We define aLRP Loss as the average [Localisation Recall Precision](https://arxiv.org/abs/1807.01696) [1] errors on positive examples. To tackle the nondifferentiable nature of ranking during backpropagation, we combine error-driven update of perceptron learning with backpropogation by generalizing the training approach of AP Loss [2] to ranking-based loss functions (see Section 4 in the paper for details). 
 
