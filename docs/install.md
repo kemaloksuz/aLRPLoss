@@ -11,7 +11,7 @@
 
 Recommended configuration: Python 3.7,PyTorch 1.4, CUDA 10.1 and mmcv 0.6.2.
 
-### Install mmdetection
+### Install mmdetection with aLRPLoss
 
 a. Create a conda virtual environment and activate it.
 
@@ -39,10 +39,10 @@ c. Clone the repository.
 
 ```shell
 git clone https://github.com/kemaloksuz/aLRPLoss.git
-cd mmdetection
+cd aLRPLoss
 ```
 
-d. Install build requirements and then install mmdetection.
+d. Install build requirements and then install mmdetection with aLRP Loss.
 (We install our forked version of pycocotools via the github repo instead of pypi
 for better compatibility with our repo.)
 
@@ -95,7 +95,7 @@ Note: We set `use_torchvision=True` on-the-fly in CPU mode for `RoIPool` and `Ro
 
 ### A from-scratch setup script
 
-Here is a full script for setting up mmdetection with conda.
+Here is a full script for setting up this repository with conda.
 
 ```shell
 conda create -n aLRPLoss python=3.7 -y
@@ -103,19 +103,9 @@ conda activate aLRPLoss
 
 # install latest pytorch prebuilt with the default prebuilt CUDA version (usually the latest)
 conda install -c pytorch pytorch torchvision -y
-git clone https://github.com/open-mmlab/mmdetection.git
-cd mmdetection
+git clone https://github.com/kemaloksuz/aLRPLoss.git
+cd aLRPLoss
 pip install -r requirements/build.txt
 pip install "git+https://github.com/open-mmlab/cocoapi.git#subdirectory=pycocotools"
 pip install -v -e .
-```
-
-### Using multiple MMDetection versions
-
-The train and test scripts already modify the `PYTHONPATH` to ensure the script use the MMDetection in the current directory.
-
-To use the default MMDetection installed in the environment rather than that you are working with, you can remove the following line in those scripts
-
-```shell
-PYTHONPATH="$(dirname $0)/..":$PYTHONPATH
 ```
