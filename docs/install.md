@@ -7,16 +7,17 @@
 - PyTorch 1.3+
 - CUDA 9.2+ (If you build PyTorch from source, CUDA 9.0 is also compatible)
 - GCC 5+
-- [mmcv](https://github.com/open-mmlab/mmcv)
+- mmcv (tested with mmcv 0.6.2)
 
+Recommended configuration: Python 3.7,PyTorch 1.4, CUDA 10.1 and mmcv 0.6.2.
 
 ### Install mmdetection
 
 a. Create a conda virtual environment and activate it.
 
 ```shell
-conda create -n open-mmlab python=3.7 -y
-conda activate open-mmlab
+conda create -n aLRPLoss python=3.7 -y
+conda activate aLRPLoss
 ```
 
 b. Install PyTorch and torchvision following the [official instructions](https://pytorch.org/), e.g.,
@@ -28,27 +29,16 @@ conda install pytorch torchvision -c pytorch
 Note: Make sure that your compilation CUDA version and runtime CUDA version match.
 You can check the supported CUDA version for precompiled packages on the [PyTorch website](https://pytorch.org/).
 
-`E.g.1` If you have CUDA 10.1 installed under `/usr/local/cuda` and would like to install
-PyTorch 1.5, you need to install the prebuilt PyTorch with CUDA 10.1.
+`E.g.` If you have CUDA 10.1 installed under `/usr/local/cuda` and would like to install
+PyTorch 1.4, you need to install the prebuilt PyTorch with CUDA 10.1.
 
 ```python
-conda install pytorch cudatoolkit=10.1 torchvision -c pytorch
+conda install pytorch=1.4 cudatoolkit=10.1 torchvision -c pytorch
 ```
-
-`E.g. 2` If you have CUDA 9.2 installed under `/usr/local/cuda` and would like to install
-PyTorch 1.3.1., you need to install the prebuilt PyTorch with CUDA 9.2.
-
-```python
-conda install pytorch=1.3.1 cudatoolkit=9.2 torchvision=0.4.2 -c pytorch
-```
-
-If you build PyTorch from source instead of installing the prebuilt pacakge,
-you can use more CUDA versions such as 9.0.
-
-c. Clone the mmdetection repository.
+c. Clone the repository.
 
 ```shell
-git clone https://github.com/open-mmlab/mmdetection.git
+git clone https://github.com/kemaloksuz/aLRPLoss.git
 cd mmdetection
 ```
 
@@ -103,28 +93,13 @@ However some functionality is gone in this mode:
 So if you try to run inference with a model containing deformable convolution you will get an error.
 Note: We set `use_torchvision=True` on-the-fly in CPU mode for `RoIPool` and `RoIAlign`
 
-### Another option: Docker Image
-
-We provide a [Dockerfile](https://github.com/open-mmlab/mmdetection/blob/master/docker/Dockerfile) to build an image.
-
-```shell
-# build an image with PyTorch 1.5, CUDA 10.1
-docker build -t mmdetection docker/
-```
-
-Run it with
-
-```shell
-docker run --gpus all --shm-size=8g -it -v {DATA_DIR}:/mmdetection/data mmdetection
-```
-
 ### A from-scratch setup script
 
 Here is a full script for setting up mmdetection with conda.
 
 ```shell
-conda create -n open-mmlab python=3.7 -y
-conda activate open-mmlab
+conda create -n aLRPLoss python=3.7 -y
+conda activate aLRPLoss
 
 # install latest pytorch prebuilt with the default prebuilt CUDA version (usually the latest)
 conda install -c pytorch pytorch torchvision -y
